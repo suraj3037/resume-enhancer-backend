@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from groq import Groq
 from pypdf import PdfReader
@@ -26,6 +27,15 @@ app = FastAPI(
     title="Resume Enhancer API (Streaming Enabled)",
     description="Backend API to analyze and enhance PDF resumes using Groq LLM with real-time streaming.",
     version="1.1.0",
+)
+
+# Configure CORS Middleware to allow requests from local or hosted frontend clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For production, replace "*" with your actual Vercel domain (e.g., "https://your-app.vercel.app")
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
