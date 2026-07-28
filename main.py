@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
-from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from fastapi import FastAPI, File, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse, StreamingResponse
 from groq import Groq
 from pypdf import PdfReader
 
@@ -23,10 +23,11 @@ DATA_DIR.mkdir(exist_ok=True)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Resume Enhancer API",
-    description="Backend API to analyze and enhance PDF resumes using Groq LLM.",
-    version="1.0.0"
+    title="Resume Enhancer API (Streaming Enabled)",
+    description="Backend API to analyze and enhance PDF resumes using Groq LLM with real-time streaming.",
+    version="1.1.0",
 )
+
 
 def extract_text_from_pdf(pdf_path: Path) -> str:
     """Extracts all text from a saved PDF file."""
@@ -41,11 +42,12 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read PDF file: {str(e)}"
+            detail=f"Failed to read PDF file: {str(e)}",
         )
 
-def get_resume_feedback(resume_text: str) -> str:
-    """Sends the extracted text to Groq LLM for analysis."""
+
+def stream_resume_feedback(resume_text: str):
+    """Generator function that yields Groq LLM tokens in real-time."""
     prompt = f"""
     You are an expert Executive Resume Writer and Technical Recruiter. 
     Analyze the following resume text and provide actionable, highly specific improvements.
@@ -61,42 +63,55 @@ def get_resume_feedback(resume_text: str) -> str:
     {resume_text}
     ---
     """
-    
+
     try:
-        response = client.chat.completions.create(
+        # Enable streaming by setting stream=True
+        stream = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "You are a professional resume reviewer. Give direct, constructive, and highly practical feedback."},
-                {"role": "user", "content": prompt}
+                {
+                    "role": "system",
+                    "content": "You are a professional resume reviewer. Give direct, constructive, and highly practical feedback.",
+                },
+                {"role": "user", "content": prompt},
             ],
             temperature=0.5,
-            max_tokens=2048
+            max_tokens=2048,
+            stream=True,
         )
-        return response.choices[0].message.content
+
+        for chunk in stream:
+            content = chunk.choices[0].delta.content
+            if content is not None:
+                # Yield data formatted for clean Server-Sent Events (SSE) or text streaming
+                yield content
+
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Groq API error: {str(e)}"
-        )
+        yield f"\n[ERROR: Groq API streaming failed: {str(e)}]"
+
 
 @app.get("/")
 def health_check():
     """Simple health check endpoint."""
-    return {"status": "active", "service": "Resume Enhancer Backend"}
+    return {"status": "active", "service": "Resume Enhancer Backend with Streaming"}
 
-@app.post("/api/v1/enhance-resume")
-async def enhance_resume(file: UploadFile = File(...)):
+
+@app.post("/api/v1/enhance-resume-stream")
+async def enhance_resume_stream(file: UploadFile = File(...)):
     """
     Upload a resume in PDF format. The file is saved locally in the 'data/' folder,
-    parsed, and sent to Groq LLM for enhancement suggestions.
+    parsed, and sent to Groq LLM for real-time enhancement suggestions via a streaming response.
     """
     # 1. Validate file extension and content type
-    if not file.filename.lower().endswith(".pdf") or file.content_type != "application/pdf":
+    if (
+        not file.filename.lower().endswith(".pdf")
+        or file.content_type != "application/pdf"
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file format. Only PDF files are accepted."
+            detail="Invalid file format. Only PDF files are accepted.",
         )
-    
+
     # 2. Save file locally inside the 'data' directory
     file_path = DATA_DIR / file.filename
     try:
@@ -106,7 +121,7 @@ async def enhance_resume(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not save file locally: {str(e)}"
+            detail=f"Could not save file locally: {str(e)}",
         )
     finally:
         await file.close()
@@ -116,20 +131,11 @@ async def enhance_resume(file: UploadFile = File(...)):
     if not resume_text:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Could not extract text from the PDF. Ensure it is not a scanned image without OCR."
+            detail="Could not extract text from the PDF. Ensure it is not a scanned image without OCR.",
         )
 
-    # 4. Query Groq LLM for analysis
-    feedback = get_resume_feedback(resume_text)
-
-    # 5. Return structured JSON response
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "success": True,
-            "filename": file.filename,
-            "saved_path": str(file_path),
-            "extracted_characters": len(resume_text),
-            "ai_suggestions": feedback
-        }
+    # 4. Return the StreamingResponse wrapping the generator
+    return StreamingResponse(
+        stream_resume_feedback(resume_text),
+        media_type="text/plain",  # Use "text/event-stream" if your frontend specifically requires SSE format
     )
