@@ -18,9 +18,9 @@ if not API_KEY:
 # Initialize Groq client
 client = Groq(api_key=API_KEY)
 
-# Define and create the data directory in the root folder if it doesn't exist
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
+# Define and create the data directory in Vercel's writable /tmp folder
+DATA_DIR = Path("/tmp/data")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -109,7 +109,7 @@ def health_check():
 @app.post("/api/v1/enhance-resume-stream")
 async def enhance_resume_stream(file: UploadFile = File(...)):
     """
-    Upload a resume in PDF format. The file is saved locally in the 'data/' folder,
+    Upload a resume in PDF format. The file is saved locally in the '/tmp/data/' folder,
     parsed, and sent to Groq LLM for real-time enhancement suggestions via a streaming response.
     """
     # 1. Validate file extension and content type
@@ -122,7 +122,7 @@ async def enhance_resume_stream(file: UploadFile = File(...)):
             detail="Invalid file format. Only PDF files are accepted.",
         )
 
-    # 2. Save file locally inside the 'data' directory
+    # 2. Save file locally inside Vercel's writable directory
     file_path = DATA_DIR / file.filename
     try:
         contents = await file.read()
