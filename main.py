@@ -32,7 +32,7 @@ app = FastAPI(
 # Configure CORS Middleware to allow requests from local or hosted frontend clients
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://resume-enhancer-livid-alpha.vercel.app/"],  # For production, replace "*" with your actual Vercel domain (e.g., "https://your-app.vercel.app")
+    allow_origins=["*"],  # For production, replace "*" with your actual Vercel domain (e.g., "https://your-app.vercel.app")
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
