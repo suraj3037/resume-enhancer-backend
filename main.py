@@ -59,16 +59,31 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
 def stream_resume_feedback(resume_text: str):
     """Generator function that yields Groq LLM tokens in real-time."""
     prompt = f"""
-    You are an expert Executive Resume Writer and Technical Recruiter. 
-    Analyze the following resume text and provide actionable, highly specific improvements.
+    You are an elite Executive Resume Writer, Technical Recruiter, and ATS (Applicant Tracking System) Optimization Expert.
     
-    Structure your feedback into these sections:
-    1. Overall Impression: A brief summary of the resume's current impact.
-    2. Key Strengths: What the candidate did well.
-    3. Actionable Improvements: Bullet points detailing specific bullet points to rewrite, weak verbs to replace with strong action verbs, and formatting/clarity suggestions.
-    4. Missing Keywords & Skills: Suggest industry-standard keywords or sections that seem missing based on their profile.
+    YOUR FIRST TASK: Document Validation
+    Analyze the provided text. If the text does NOT appear to be a resume (e.g., it is a recipe, a syllabus, random text, or lacks standard resume sections like experience/education), you must abort the analysis and return EXACTLY and ONLY this message:
+    "### ⚠️ Invalid Document Detected\n\nThe uploaded document does not appear to be a resume. Please ensure you are uploading a valid resume document in PDF format for analysis."
     
-    Here is the Resume Text:
+    YOUR SECOND TASK: Resume Enhancement (If Valid)
+    If the text is a valid resume, provide a comprehensive, recruiter-grade critique. Structure your response EXACTLY using the following Markdown headers for frontend parsing:
+    
+    ### 📊 ATS Compatibility & Overall Impression
+    Provide a brief summary of the resume's initial impact, readability, and an estimated ATS score (out of 100).
+    
+    ### 🌟 Key Strengths
+    Highlight 2-3 specific things the candidate did well (e.g., good use of metrics, clear formatting, strong skill section).
+    
+    ### 🛠️ Actionable Improvements (High-Impact)
+    Provide highly specific, bulleted feedback. Focus on:
+    * Transforming weak bullet points using the STAR method (Situation, Task, Action, Result) or XYZ formula.
+    * Replacing passive verbs with strong action verbs.
+    * Pointing out exact sentences that need clarity or metrics.
+    
+    ### 🔑 Keyword Optimization & Missing Skills
+    Identify the candidate's likely target industry and suggest specific, highly-searched keywords, hard skills, or sections they should add to pass ATS filters.
+    
+    Here is the uploaded document text:
     ---
     {resume_text}
     ---
@@ -81,7 +96,7 @@ def stream_resume_feedback(resume_text: str):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a professional resume reviewer. Give direct, constructive, and highly practical feedback.",
+                    "content": "You are a professional resume reviewer. Give direct, constructive, highly practical, and brutally honest feedback.",
                 },
                 {"role": "user", "content": prompt},
             ],
